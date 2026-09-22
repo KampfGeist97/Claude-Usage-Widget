@@ -23,7 +23,7 @@ use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_opener::OpenerExt;
 use url::Url;
 
-const VERSION: &str = "2.2.0";
+const VERSION: &str = "2.2.1";
 const SERVICE_NAME: &str = "ClaudeUsageWidget";
 const CREDENTIAL_ACCOUNT: &str = "claude-oauth";
 const API_URL: &str = "https://api.anthropic.com/api/oauth/usage";
@@ -127,7 +127,7 @@ fn save_widget_settings(app: &AppHandle, settings: &WidgetSettings) -> Result<()
     std::fs::write(path, text).map_err(|e| e.to_string())
 }
 
-fn work_area_for_position(window: &WebviewWindow, x: i32, y: i32) -> Result<tauri::Rect, String> {
+fn work_area_for_position(window: &WebviewWindow, x: i32, y: i32) -> Result<(i32, i32, u32, u32), String> {
     let monitors = window.available_monitors().map_err(|e| e.to_string())?;
     if let Some(monitor) = monitors.iter().find(|m| {
         let a = m.work_area();
@@ -137,22 +137,25 @@ fn work_area_for_position(window: &WebviewWindow, x: i32, y: i32) -> Result<taur
         let bottom = top + a.size.height as i32;
         x >= left && x < right && y >= top && y < bottom
     }) {
-        return Ok(monitor.work_area());
+        let a = monitor.work_area();
+        return Ok((a.position.x, a.position.y, a.size.width, a.size.height));
     }
-    window
+
+    let monitor = window
         .primary_monitor()
         .map_err(|e| e.to_string())?
-        .map(|m| m.work_area())
-        .ok_or_else(|| "Kein Monitor gefunden".to_string())
+        .ok_or_else(|| "Kein Monitor gefunden".to_string())?;
+    let a = monitor.work_area();
+    Ok((a.position.x, a.position.y, a.size.width, a.size.height))
 }
 
 fn clamp_to_work_area(window: &WebviewWindow, x: i32, y: i32) -> Result<PhysicalPosition<i32>, String> {
-    let area = work_area_for_position(window, x, y)?;
+    let (area_x, area_y, area_width, area_height) = work_area_for_position(window, x, y)?;
     let size = window.outer_size().map_err(|e| e.to_string())?;
-    let min_x = area.position.x;
-    let min_y = area.position.y;
-    let max_x = area.position.x + area.size.width as i32 - size.width as i32;
-    let max_y = area.position.y + area.size.height as i32 - size.height as i32;
+    let min_x = area_x;
+    let min_y = area_y;
+    let max_x = area_x + area_width as i32 - size.width as i32;
+    let max_y = area_y + area_height as i32 - size.height as i32;
     Ok(PhysicalPosition::new(
         x.clamp(min_x, max_x.max(min_x)),
         y.clamp(min_y, max_y.max(min_y)),
@@ -774,14 +777,16 @@ pub fn run() {
             }
             if let WindowEvent::Moved(position) = event {
                 let app = window.app_handle();
-                let state = app.state::<AppState>();
-                if let Ok(mut settings) = state.settings.lock() {
+                let settings_store = app.state::<AppState>().settings.clone();
+                if let Ok(mut settings) = settings_store.lock() {
                     if settings.remember_position {
                         settings.x = Some(position.x);
                         settings.y = Some(position.y);
-                        let _ = save_widget_settings(app, &settings);
+                        let snapshot = settings.clone();
+                        drop(settings);
+                        let _ = save_widget_settings(app, &snapshot);
                     }
-                }
+                };
             }
             if let WindowEvent::Focused(false) = event {
                 let hide_on_focus_loss = window

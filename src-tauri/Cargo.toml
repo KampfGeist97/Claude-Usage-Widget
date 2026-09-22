@@ -1,6 +1,6 @@
 [package]
 name = "claude-usage-widget"
-version = "2.2.0"
+version = "2.2.1"
 description = "Portable Windows tray widget for Claude subscription usage"
 authors = ["Local build"]
 edition = "2021"

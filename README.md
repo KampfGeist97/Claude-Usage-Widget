@@ -91,3 +91,9 @@ Eine nicht signierte, unbekannte Windows-EXE kann trotz unauffälligem Quellcode
 - Neue Einstellung `Widget-Position merken`. Sie wird zusammen mit der letzten Fensterposition unter dem App-Konfigurationsverzeichnis gespeichert.
 - Gespeicherte Positionen werden beim Wiederherstellen auf einen vorhandenen Monitor-Arbeitsbereich begrenzt. Das hilft nach Monitor-/Docking-Wechseln.
 - Release-EXE startet ohne sichtbares Konsolenfenster.
+
+
+## v2.2.1
+
+- Fix Tauri 2 work-area type handling on Windows (`PhysicalRect` instead of generic `Rect`).
+- Fix Rust borrow lifetime when persisting moved window position.
