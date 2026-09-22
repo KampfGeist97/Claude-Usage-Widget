@@ -17,14 +17,13 @@ use sha2::{Digest, Sha256};
 use tauri::{
     menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, WindowEvent,
+    AppHandle, Emitter, Manager, PhysicalPosition, WebviewWindow, WindowEvent,
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_opener::OpenerExt;
-use tauri_plugin_positioner::{Position, WindowExt};
 use url::Url;
 
-const VERSION: &str = "2.0.0";
+const VERSION: &str = "2.2.0";
 const SERVICE_NAME: &str = "ClaudeUsageWidget";
 const CREDENTIAL_ACCOUNT: &str = "claude-oauth";
 const API_URL: &str = "https://api.anthropic.com/api/oauth/usage";
@@ -88,10 +87,109 @@ struct OAuthRuntime {
     error: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+struct WidgetSettings {
+    remember_position: bool,
+    hide_on_focus_loss: bool,
+    x: Option<i32>,
+    y: Option<i32>,
+}
+
+impl Default for WidgetSettings {
+    fn default() -> Self {
+        Self { remember_position: true, hide_on_focus_loss: false, x: None, y: None }
+    }
+}
+
 #[derive(Clone)]
 struct AppState {
     oauth: Arc<Mutex<OAuthRuntime>>,
+    settings: Arc<Mutex<WidgetSettings>>,
     http: Client,
+}
+
+fn settings_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join("settings.json"))
+}
+
+fn load_widget_settings(app: &AppHandle) -> WidgetSettings {
+    let Ok(path) = settings_path(app) else { return WidgetSettings::default(); };
+    let Ok(text) = std::fs::read_to_string(path) else { return WidgetSettings::default(); };
+    serde_json::from_str(&text).unwrap_or_default()
+}
+
+fn save_widget_settings(app: &AppHandle, settings: &WidgetSettings) -> Result<(), String> {
+    let path = settings_path(app)?;
+    let text = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
+    std::fs::write(path, text).map_err(|e| e.to_string())
+}
+
+fn work_area_for_position(window: &WebviewWindow, x: i32, y: i32) -> Result<tauri::Rect, String> {
+    let monitors = window.available_monitors().map_err(|e| e.to_string())?;
+    if let Some(monitor) = monitors.iter().find(|m| {
+        let a = m.work_area();
+        let left = a.position.x;
+        let top = a.position.y;
+        let right = left + a.size.width as i32;
+        let bottom = top + a.size.height as i32;
+        x >= left && x < right && y >= top && y < bottom
+    }) {
+        return Ok(monitor.work_area());
+    }
+    window
+        .primary_monitor()
+        .map_err(|e| e.to_string())?
+        .map(|m| m.work_area())
+        .ok_or_else(|| "Kein Monitor gefunden".to_string())
+}
+
+fn clamp_to_work_area(window: &WebviewWindow, x: i32, y: i32) -> Result<PhysicalPosition<i32>, String> {
+    let area = work_area_for_position(window, x, y)?;
+    let size = window.outer_size().map_err(|e| e.to_string())?;
+    let min_x = area.position.x;
+    let min_y = area.position.y;
+    let max_x = area.position.x + area.size.width as i32 - size.width as i32;
+    let max_y = area.position.y + area.size.height as i32 - size.height as i32;
+    Ok(PhysicalPosition::new(
+        x.clamp(min_x, max_x.max(min_x)),
+        y.clamp(min_y, max_y.max(min_y)),
+    ))
+}
+
+fn position_bottom_right(window: &WebviewWindow) -> Result<(), String> {
+    let monitor = window
+        .primary_monitor()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Kein primärer Monitor gefunden".to_string())?;
+    let area = monitor.work_area();
+    let size = window.outer_size().map_err(|e| e.to_string())?;
+    let margin = 12i32;
+    let x = area.position.x + area.size.width as i32 - size.width as i32 - margin;
+    let y = area.position.y + area.size.height as i32 - size.height as i32 - margin;
+    let pos = clamp_to_work_area(window, x, y)?;
+    window.set_position(pos).map_err(|e| e.to_string())
+}
+
+fn apply_saved_or_default_position(app: &AppHandle, window: &WebviewWindow) {
+    let settings = app
+        .state::<AppState>()
+        .settings
+        .lock()
+        .map(|s| s.clone())
+        .unwrap_or_default();
+
+    if settings.remember_position {
+        if let (Some(x), Some(y)) = (settings.x, settings.y) {
+            if let Ok(pos) = clamp_to_work_area(window, x, y) {
+                let _ = window.set_position(pos);
+                return;
+            }
+        }
+    }
+    let _ = position_bottom_right(window);
 }
 
 fn now_unix() -> i64 {
@@ -460,6 +558,38 @@ fn set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn get_remember_position(state: tauri::State<'_, AppState>) -> Result<bool, String> {
+    state
+        .settings
+        .lock()
+        .map(|s| s.remember_position)
+        .map_err(|_| "Widget-Einstellungen gesperrt".to_string())
+}
+
+#[tauri::command]
+fn set_remember_position(app: AppHandle, state: tauri::State<'_, AppState>, enabled: bool) -> Result<(), String> {
+    let mut settings = state.settings.lock().map_err(|_| "Widget-Einstellungen gesperrt".to_string())?;
+    settings.remember_position = enabled;
+    save_widget_settings(&app, &settings)
+}
+
+#[tauri::command]
+fn get_hide_on_focus_loss(state: tauri::State<'_, AppState>) -> Result<bool, String> {
+    state
+        .settings
+        .lock()
+        .map(|s| s.hide_on_focus_loss)
+        .map_err(|_| "Widget-Einstellungen gesperrt".to_string())
+}
+
+#[tauri::command]
+fn set_hide_on_focus_loss(app: AppHandle, state: tauri::State<'_, AppState>, enabled: bool) -> Result<(), String> {
+    let mut settings = state.settings.lock().map_err(|_| "Widget-Einstellungen gesperrt".to_string())?;
+    settings.hide_on_focus_loss = enabled;
+    save_widget_settings(&app, &settings)
+}
+
+#[tauri::command]
 fn start_oauth(app: AppHandle, state: tauri::State<'_, AppState>) -> Result<(), String> {
     {
         let mut runtime = state.oauth.lock().map_err(|_| "OAuth-Status gesperrt".to_string())?;
@@ -544,7 +674,17 @@ fn show_widget(app: &AppHandle) {
         if visible {
             let _ = window.hide();
         } else {
-            let _ = window.as_ref().window().move_window(Position::TrayBottomCenter);
+            let remember = app
+                .state::<AppState>()
+                .settings
+                .lock()
+                .map(|s| s.remember_position)
+                .unwrap_or(true);
+            if !remember {
+                let _ = position_bottom_right(&window);
+            } else {
+                apply_saved_or_default_position(app, &window);
+            }
             let _ = window.show();
             let _ = window.set_focus();
         }
@@ -555,6 +695,7 @@ fn show_widget(app: &AppHandle) {
 pub fn run() {
     let state = AppState {
         oauth: Arc::new(Mutex::new(OAuthRuntime::default())),
+        settings: Arc::new(Mutex::new(WidgetSettings::default())),
         http: Client::builder()
             .timeout(Duration::from_secs(20))
             .build()
@@ -564,7 +705,6 @@ pub fn run() {
     tauri::Builder::default()
         .manage(state)
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .invoke_handler(tauri::generate_handler![
             auth_status,
@@ -574,9 +714,18 @@ pub fn run() {
             hide_window,
             quit_app,
             get_autostart,
-            set_autostart
+            set_autostart,
+            get_remember_position,
+            set_remember_position,
+            get_hide_on_focus_loss,
+            set_hide_on_focus_loss
         ])
         .setup(|app| {
+            let loaded_settings = load_widget_settings(app.handle());
+            if let Ok(mut settings) = app.state::<AppState>().settings.lock() {
+                *settings = loaded_settings;
+            }
+
             let open = MenuItemBuilder::with_id("open", "Dashboard öffnen").build(app)?;
             let refresh = MenuItemBuilder::with_id("refresh", "Jetzt aktualisieren").build(app)?;
             let autostart_enabled = app.autolaunch().is_enabled().unwrap_or(false);
@@ -594,7 +743,6 @@ pub fn run() {
                 .menu(&menu)
                 .tooltip("Claude Usage Widget")
                 .on_tray_icon_event(|tray, event| {
-                    tauri_plugin_positioner::on_tray_event(tray.app_handle(), &event);
                     if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
                         show_widget(tray.app_handle());
                     }
@@ -615,7 +763,7 @@ pub fn run() {
             tray_builder.build(app)?;
 
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.as_ref().window().move_window(Position::TrayBottomCenter);
+                apply_saved_or_default_position(app.handle(), &window);
             }
             Ok(())
         })
@@ -624,8 +772,28 @@ pub fn run() {
                 api.prevent_close();
                 let _ = window.hide();
             }
+            if let WindowEvent::Moved(position) = event {
+                let app = window.app_handle();
+                let state = app.state::<AppState>();
+                if let Ok(mut settings) = state.settings.lock() {
+                    if settings.remember_position {
+                        settings.x = Some(position.x);
+                        settings.y = Some(position.y);
+                        let _ = save_widget_settings(app, &settings);
+                    }
+                }
+            }
             if let WindowEvent::Focused(false) = event {
-                let _ = window.hide();
+                let hide_on_focus_loss = window
+                    .app_handle()
+                    .state::<AppState>()
+                    .settings
+                    .lock()
+                    .map(|s| s.hide_on_focus_loss)
+                    .unwrap_or(false);
+                if hide_on_focus_loss {
+                    let _ = window.hide();
+                }
             }
         })
         .run(tauri::generate_context!())

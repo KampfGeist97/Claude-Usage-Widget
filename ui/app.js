@@ -7,6 +7,8 @@ const creditsEl = document.querySelector('#credits');
 const statusEl = document.querySelector('#status');
 const authMessage = document.querySelector('#authMessage');
 const refreshInterval = document.querySelector('#refreshInterval');
+const rememberPosition = document.querySelector('#rememberPosition');
+const hideOnFocusLoss = document.querySelector('#hideOnFocusLoss');
 let refreshTimer = null;
 let lastSnapshot = null;
 
@@ -67,9 +69,16 @@ function setTimer(){
 document.querySelector('#refreshBtn').onclick=refresh;
 document.querySelector('#hideBtn').onclick=()=>invoke('hide_window');
 document.querySelector('#loginBtn').onclick=async()=>{authMessage.textContent='Browser wird geöffnet …';try{await invoke('start_oauth');authMessage.textContent='Anmeldung im Browser abschließen …';}catch(e){authMessage.textContent=String(e);}};
-document.querySelector('#menuBtn').onclick=async()=>{show(settings);try{document.querySelector('#autostart').checked=await invoke('get_autostart');}catch{}};
+document.querySelector('#menuBtn').onclick=async()=>{
+  show(settings);
+  try{document.querySelector('#autostart').checked=await invoke('get_autostart');}catch{}
+  try{rememberPosition.checked=await invoke('get_remember_position');}catch{}
+  try{hideOnFocusLoss.checked=await invoke('get_hide_on_focus_loss');}catch{}
+};
 document.querySelector('#settingsBack').onclick=()=>show(usageView);
 document.querySelector('#autostart').onchange=async e=>{try{await invoke('set_autostart',{enabled:e.target.checked});}catch(err){e.target.checked=!e.target.checked;alert(String(err));}};
+rememberPosition.onchange=async e=>{try{await invoke('set_remember_position',{enabled:e.target.checked});}catch(err){e.target.checked=!e.target.checked;alert(String(err));}};
+hideOnFocusLoss.onchange=async e=>{try{await invoke('set_hide_on_focus_loss',{enabled:e.target.checked});}catch(err){e.target.checked=!e.target.checked;alert(String(err));}};
 refreshInterval.onchange=e=>{localStorage.setItem('refreshSeconds',e.target.value);setTimer();};
 document.querySelector('#logoutBtn').onclick=async()=>{await invoke('disconnect');lastSnapshot=null;checkAuth();};
 document.querySelector('#quitBtn').onclick=()=>invoke('quit_app');

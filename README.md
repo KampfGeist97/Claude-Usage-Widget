@@ -1,12 +1,17 @@
 # Claude Usage Widget — Tauri 2
 
+Version 2.2.0
+
 Portable Windows-11-Tray-App für die Anzeige der Claude-Nutzungslimits.
 
 ## Zielverhalten
 
 - startet standardmäßig unsichtbar im Windows-Infobereich (Tray)
 - Linksklick auf das Tray-Icon: Dashboard ein-/ausblenden
-- Klick außerhalb des Widgets: wieder ausblenden
+- sichere Startposition unten rechts **innerhalb des Windows-Arbeitsbereichs** (oberhalb der Taskleiste)
+- Dashboard über den Titelbereich frei verschiebbar
+- Einstellung **Widget-Position merken**: zuletzt verschobene Position beibehalten oder beim Wiedereinblenden wieder unten rechts positionieren
+- Einstellung **Bei Fokusverlust ausblenden**: wahlweise Tray-Popup-Verhalten oder dauerhaft sichtbares Always-on-top-Mini-Dashboard
 - kein Taskleisten-Button (`skipTaskbar`)
 - Always-on-top
 - `X` blendet nur aus; beendet wird über Tray-Menü oder Einstellungen
@@ -15,6 +20,7 @@ Portable Windows-11-Tray-App für die Anzeige der Claude-Nutzungslimits.
 - OAuth/PKCE direkt aus der App — Claude Code wird nicht benötigt
 - OAuth-Token im Windows Credential Manager, nicht in einer Klartextdatei
 - keine Python-/Node-/Rust-Laufzeit beim Endanwender
+- Release-Build verwendet das Windows-GUI-Subsystem; dadurch öffnet sich beim Start **kein CMD-/Konsolenfenster**
 
 ## Wichtige technische Einschränkung
 
@@ -70,3 +76,18 @@ Das Repository enthält `.github/workflows/build-windows.yml`. Wenn der Ordner i
 ## Hinweis zu Antivirus / SmartScreen
 
 Eine nicht signierte, unbekannte Windows-EXE kann trotz unauffälligem Quellcode von SmartScreen oder heuristischen AV-Systemen beanstandet werden. Tauri vermeidet zwar typische PyInstaller-Probleme, ersetzt aber keine Code-Signatur. Für private Nutzung kann die portable EXE lokal gebaut werden; für breitere Verteilung ist eine Authenticode-Signatur sinnvoll.
+
+## Änderungen in 2.2.0
+
+- Neue Einstellung `Bei Fokusverlust ausblenden`. Standard ist **Aus**: Das Widget bleibt sichtbar und always-on-top, auch wenn du in andere Programme klickst.
+- Bei aktivierter Option verhält es sich wie ein klassisches Tray-Popup und blendet sich beim Fokusverlust automatisch aus.
+- Manuelles Ausblenden funktioniert unabhängig davon weiterhin über `×` oder einen erneuten Linksklick auf das Tray-Icon.
+- Die Einstellung wird zusammen mit den Widget-Positionseinstellungen persistent gespeichert.
+
+## Änderungen in 2.1.0
+
+- Tray-Positioner entfernt; die Fensterposition wird jetzt gegen den echten Monitor-`work_area` berechnet. Dadurch bleibt das Widget oberhalb der Taskleiste und vollständig im sichtbaren Bereich.
+- Position kann über den linken Kopfbereich frei verschoben werden.
+- Neue Einstellung `Widget-Position merken`. Sie wird zusammen mit der letzten Fensterposition unter dem App-Konfigurationsverzeichnis gespeichert.
+- Gespeicherte Positionen werden beim Wiederherstellen auf einen vorhandenen Monitor-Arbeitsbereich begrenzt. Das hilft nach Monitor-/Docking-Wechseln.
+- Release-EXE startet ohne sichtbares Konsolenfenster.

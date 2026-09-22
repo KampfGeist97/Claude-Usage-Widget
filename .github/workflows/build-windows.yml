@@ -1,38 +1,22 @@
 name: Build Windows Portable
-
 on:
   workflow_dispatch:
   push:
-    tags:
-      - "v*"
-
+    tags: ['v*']
 permissions:
   contents: read
-
 jobs:
   build:
     runs-on: windows-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build portable Windows app
-        run: npm run build -- --no-bundle
-
-      - name: Upload portable EXE
-        uses: actions/upload-artifact@v4
+      - run: npm install
+      - run: npm run build -- --no-bundle
+      - uses: actions/upload-artifact@v4
         with:
           name: ClaudeUsageWidget-portable-windows-x64
           path: src-tauri/target/release/ClaudeUsageWidget.exe
