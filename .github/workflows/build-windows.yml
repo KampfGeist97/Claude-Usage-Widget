@@ -1,0 +1,24 @@
+name: Build Windows Portable
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - run: npm run build -- --no-bundle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ClaudeUsageWidget-portable-windows-x64
+          path: src-tauri/target/release/ClaudeUsageWidget.exe
+          if-no-files-found: error
