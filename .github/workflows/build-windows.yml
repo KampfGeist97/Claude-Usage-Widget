@@ -1,23 +1,45 @@
-name: Build Windows Portable
+name: Build Electron Windows
+
 on:
   workflow_dispatch:
   push:
-    tags: ['v*']
+    branches:
+      - electron
+      - electron-v3
+    tags:
+      - "v3*"
+
 permissions:
   contents: read
+
 jobs:
   build:
     runs-on: windows-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: npm install
-      - run: npm run build -- --no-bundle
-      - uses: actions/upload-artifact@v4
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Syntax and unit tests
+        run: |
+          npm run check
+          npm test
+
+      - name: Build unpacked Windows app
+        run: npm run build:win
+
+      - name: Upload Windows app
+        uses: actions/upload-artifact@v4
         with:
-          name: ClaudeUsageWidget-portable-windows-x64
-          path: src-tauri/target/release/ClaudeUsageWidget.exe
+          name: ClaudeUsageWidget-electron-v3-windows-x64
+          path: dist/win-unpacked/**
           if-no-files-found: error
+          retention-days: 30

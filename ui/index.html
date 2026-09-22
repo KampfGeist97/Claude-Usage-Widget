@@ -3,31 +3,32 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'none';" />
   <title>Claude Usage</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <main class="panel">
-    <header>
-      <div class="drag-title" data-tauri-drag-region>
-        <div class="eyebrow" data-tauri-drag-region>CLAUDE</div>
-        <h1 data-tauri-drag-region>Usage</h1>
+    <header class="drag-region">
+      <div class="drag-title">
+        <div class="eyebrow">CLAUDE</div>
+        <h1>Usage</h1>
       </div>
-      <div class="actions">
+      <div class="actions no-drag">
         <button id="refreshBtn" class="icon" title="Aktualisieren">↻</button>
         <button id="hideBtn" class="icon" title="Ausblenden">×</button>
       </div>
     </header>
 
-    <section id="authView" class="auth hidden">
+    <section id="authView" class="auth hidden no-drag">
       <div class="orb"></div>
       <h2>Claude verbinden</h2>
-      <p>Einmalige Anmeldung im Browser. Claude Code wird nicht benötigt.</p>
-      <button id="loginBtn" class="primary">Mit Claude verbinden</button>
+      <p>Einmal in einer isolierten Claude-WebSession anmelden. Danach liest das Widget die Usage live im Hintergrund.</p>
+      <button id="loginBtn" class="primary">Mit Claude anmelden</button>
       <p id="authMessage" class="message"></p>
     </section>
 
-    <section id="usageView" class="hidden">
+    <section id="usageView" class="hidden no-drag">
       <div id="limits" class="limits"></div>
       <div id="credits" class="credits hidden"></div>
       <footer>
@@ -36,20 +37,22 @@
       </footer>
     </section>
 
-    <section id="settings" class="settings hidden">
+    <section id="settings" class="settings hidden no-drag">
       <div class="settings-head">
         <h2>Einstellungen</h2>
         <button id="settingsBack" class="icon">←</button>
       </div>
       <label class="row"><span>Mit Windows starten</span><input id="autostart" type="checkbox" /></label>
       <label class="row"><span>Widget-Position merken</span><input id="rememberPosition" type="checkbox" /></label>
-      <p class="setting-hint">Ein: beim Wiedereinblenden an der zuletzt verschobenen Position. Aus: immer unten rechts über der Taskleiste.</p>
+      <p class="setting-hint">Ein: beim Wiedereinblenden an der letzten Position. Aus: unten rechts über der Taskleiste des aktuellen Monitors.</p>
       <label class="row"><span>Bei Fokusverlust ausblenden</span><input id="hideOnFocusLoss" type="checkbox" /></label>
-      <p class="setting-hint">Aus: Das Widget bleibt als Always-on-top-Mini-Dashboard sichtbar, bis du es über × oder das Tray-Icon ausblendest. Ein: Klick außerhalb blendet es automatisch aus.</p>
+      <p class="setting-hint">Aus: bleibt als Always-on-top-Dashboard sichtbar. Ein: Klick außerhalb blendet es aus.</p>
       <label class="row"><span>Auto-Refresh</span><select id="refreshInterval"><option value="60">1 Minute</option><option value="120">2 Minuten</option><option value="300">5 Minuten</option><option value="600">10 Minuten</option></select></label>
+      <button id="reloginBtn" class="secondary">Claude-Anmeldung öffnen</button>
       <button id="logoutBtn" class="danger">Claude-Verbindung trennen</button>
       <button id="quitBtn" class="secondary">Widget vollständig beenden</button>
-      <p class="fineprint">Die Usage-Schnittstelle von Anthropic ist nicht als stabile öffentliche Drittanbieter-API dokumentiert und kann sich ändern.</p>
+      <p class="fineprint">Die Claude-WebSession ist nur für dieses Widget und getrennt von Claude Desktop/anderen Browsern. Das Widget speichert den Session-Key nicht selbst; Chromium verwaltet die Session in seinem lokalen Profil.</p>
+      <p class="fineprint">Der verwendete Claude.ai-Usage-Endpunkt ist nicht als öffentliche Drittanbieter-API dokumentiert und kann sich ändern.</p>
     </section>
   </main>
   <script src="app.js"></script>

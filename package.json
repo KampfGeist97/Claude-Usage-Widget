@@ -1,13 +1,46 @@
 {
-  "name": "claude-usage-widget-tauri2",
+  "name": "claude-usage-widget-electron",
+  "version": "3.0.0",
+  "description": "Windows tray widget for live Claude.ai subscription usage using an isolated persistent browser session.",
+  "main": "src/main.js",
+  "author": "Community project",
+  "license": "MIT",
   "private": true,
-  "version": "2.2.2",
   "scripts": {
-    "tauri": "tauri",
-    "dev": "tauri dev",
-    "build": "tauri build"
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "check": "node --check src/main.js && node --check src/preload.js && node --check src/usage-parser.js && node --check ui/app.js",
+    "build:win": "electron-builder --win --x64 --dir",
+    "build:portable": "electron-builder --win portable --x64"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.2.1"
+    "electron": "44.4.3",
+    "electron-builder": "26.16.1"
+  },
+  "build": {
+    "appId": "local.claude.usage.widget",
+    "productName": "Claude Usage Widget",
+    "asar": true,
+    "compression": "normal",
+    "files": [
+      "src/**/*",
+      "ui/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "win": {
+      "icon": "assets/icon.ico",
+      "artifactName": "ClaudeUsageWidget-${version}-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "ClaudeUsageWidget-${version}-portable-${arch}.${ext}"
+    }
+  },
+  "engines": {
+    "node": ">=24"
   }
 }
