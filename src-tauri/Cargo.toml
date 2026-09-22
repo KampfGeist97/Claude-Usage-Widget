@@ -1,6 +1,6 @@
 [package]
 name = "claude-usage-widget"
-version = "2.2.1"
+version = "2.2.2"
 description = "Portable Windows tray widget for Claude subscription usage"
 authors = ["Local build"]
 edition = "2021"
@@ -22,7 +22,7 @@ tauri-plugin-opener = "2"
 tauri-plugin-autostart = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls"] }
 url = "2"
 rand = "0.8"
 sha2 = "0.10"

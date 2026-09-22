@@ -1,6 +1,6 @@
 # Claude Usage Widget — Tauri 2
 
-Version 2.2.0
+Version 2.2.2
 
 Portable Windows-11-Tray-App für die Anzeige der Claude-Nutzungslimits.
 
@@ -97,3 +97,12 @@ Eine nicht signierte, unbekannte Windows-EXE kann trotz unauffälligem Quellcode
 
 - Fix Tauri 2 work-area type handling on Windows (`PhysicalRect` instead of generic `Rect`).
 - Fix Rust borrow lifetime when persisting moved window position.
+
+
+## v2.2.2
+
+- OAuth-Token-Request verwendet jetzt `Accept: application/json, text/plain, */*` und einen kompatibleren HTTP-Client-Header.
+- Windows-Build nutzt für HTTPS jetzt `native-tls` statt `rustls`, damit der Windows-Zertifikatsspeicher (inkl. Unternehmens-Root-CAs) berücksichtigt wird.
+- Separate Connect- und Gesamt-Timeouts für OAuth/Usage-Requests.
+- Detaillierte OAuth-Fehlerdiagnose: Timeout/Connect/TLS-Ursache, HTTP-Status und gekürzter Response-Body werden angezeigt.
+- Erfolgreiche, aber unerwartete OAuth-Antworten zeigen jetzt ebenfalls einen gekürzten Response-Body zur Diagnose.

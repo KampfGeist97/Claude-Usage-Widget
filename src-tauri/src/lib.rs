@@ -6,6 +6,7 @@ use std::{
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use std::error::Error as StdError;
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::{DateTime, Utc};
@@ -23,7 +24,7 @@ use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_opener::OpenerExt;
 use url::Url;
 
-const VERSION: &str = "2.2.1";
+const VERSION: &str = "2.2.2";
 const SERVICE_NAME: &str = "ClaudeUsageWidget";
 const CREDENTIAL_ACCOUNT: &str = "claude-oauth";
 const API_URL: &str = "https://api.anthropic.com/api/oauth/usage";
@@ -250,27 +251,94 @@ struct OAuthTokenResponse {
     token_type: Option<String>,
 }
 
+fn reqwest_error_details(context: &str, err: &reqwest::Error) -> String {
+    let mut parts = Vec::new();
+    if err.is_timeout() {
+        parts.push("Timeout".to_string());
+    }
+    if err.is_connect() {
+        parts.push("Verbindungs-/TLS-Fehler".to_string());
+    }
+    if let Some(status) = err.status() {
+        parts.push(format!("HTTP {}", status.as_u16()));
+    }
+
+    let mut source = StdError::source(err);
+    let mut depth = 0;
+    while let Some(cause) = source {
+        let text = cause.to_string();
+        if !text.is_empty() && !parts.iter().any(|p| p == &text) {
+            parts.push(text);
+        }
+        source = cause.source();
+        depth += 1;
+        if depth >= 5 {
+            break;
+        }
+    }
+
+    let suffix = if parts.is_empty() {
+        err.to_string()
+    } else {
+        parts.join(" → ")
+    };
+    format!("{context}: {suffix}")
+}
+
+fn compact_response_body(text: &str) -> String {
+    let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    const MAX_CHARS: usize = 900;
+    if normalized.chars().count() <= MAX_CHARS {
+        normalized
+    } else {
+        let shortened: String = normalized.chars().take(MAX_CHARS).collect();
+        format!("{shortened} …")
+    }
+}
+
 async fn token_request(http: &Client, body: Value) -> Result<OAuthTokenResponse, String> {
     let response = http
         .post(OAUTH_TOKEN_URL)
-        .header("Accept", "application/json")
+        .header("Accept", "application/json, text/plain, */*")
         .header("Content-Type", "application/json")
-        .header("User-Agent", format!("claude-usage-widget/{VERSION}"))
+        .header("User-Agent", "axios/1.13.6")
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("OAuth-Netzwerkfehler: {e}"))?;
+        .map_err(|e| reqwest_error_details("OAuth-Netzwerkfehler", &e))?;
 
     let status = response.status();
-    let text = response.text().await.map_err(|e| e.to_string())?;
+    let text = response
+        .text()
+        .await
+        .map_err(|e| reqwest_error_details("OAuth-Antwort konnte nicht gelesen werden", &e))?;
+
     if !status.is_success() {
+        let body_text = compact_response_body(&text);
         let detail = serde_json::from_str::<Value>(&text)
             .ok()
-            .and_then(|v| v.get("error_description").or_else(|| v.get("message")).and_then(Value::as_str).map(str::to_owned))
-            .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
-        return Err(format!("OAuth-Token-Endpunkt: {detail}"));
+            .and_then(|v| {
+                v.get("error_description")
+                    .or_else(|| v.get("message"))
+                    .or_else(|| v.get("error"))
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+            });
+
+        let mut message = format!("OAuth-Token-Endpunkt: HTTP {} {}", status.as_u16(), status.canonical_reason().unwrap_or(""));
+        if let Some(detail) = detail {
+            message.push_str(&format!(" — {detail}"));
+        }
+        if !body_text.is_empty() {
+            message.push_str(&format!(" — Antwort: {body_text}"));
+        }
+        return Err(message);
     }
-    serde_json::from_str(&text).map_err(|e| format!("Ungültige OAuth-Antwort: {e}"))
+
+    serde_json::from_str(&text).map_err(|e| {
+        let body_text = compact_response_body(&text);
+        format!("Ungültige OAuth-Antwort: {e} — Antwort: {body_text}")
+    })
 }
 
 fn response_to_credentials(payload: OAuthTokenResponse, previous: Option<&Credentials>) -> Result<Credentials, String> {
@@ -700,7 +768,8 @@ pub fn run() {
         oauth: Arc::new(Mutex::new(OAuthRuntime::default())),
         settings: Arc::new(Mutex::new(WidgetSettings::default())),
         http: Client::builder()
-            .timeout(Duration::from_secs(20))
+            .connect_timeout(Duration::from_secs(12))
+            .timeout(Duration::from_secs(30))
             .build()
             .expect("HTTP client"),
     };
