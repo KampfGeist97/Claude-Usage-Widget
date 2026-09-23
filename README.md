@@ -1,4 +1,6 @@
-# Claude Usage Widget — Electron v3
+# Claude Usage Widget – Electron v3.0.1
+
+— Electron v3
 
 Windows tray widget for live Claude.ai subscription usage. This branch replaces the previous Tauri/OAuth implementation with an isolated persistent Chromium session.
 
@@ -116,3 +118,11 @@ Do not commit `node_modules`, `dist`, Electron profile data, cookies, or screens
 ## Version
 
 3.0.0
+
+
+## v3.0.1
+
+- Windows-App-Icon als echtes Multi-Resolution-ICO (16–256 px) neu erzeugt.
+- Behebt den electron-builder-Fehler `Icon must be at least 256x256 pixels`.
+- GitHub-Actions-Trigger für `feature/switch-to-Electron` ergänzt.
+- Build setzt `--publish never`, damit CI nicht implizit Publishing versucht.

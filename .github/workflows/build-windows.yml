@@ -6,6 +6,7 @@ on:
     branches:
       - electron
       - electron-v3
+      - feature/switch-to-Electron
     tags:
       - "v3*"
 
@@ -34,7 +35,7 @@ jobs:
           npm test
 
       - name: Build unpacked Windows app
-        run: npm run build:win
+        run: npm run build:win -- --publish never
 
       - name: Upload Windows app
         uses: actions/upload-artifact@v4
